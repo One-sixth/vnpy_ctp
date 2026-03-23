@@ -124,7 +124,7 @@ OPTIONTYPE_CTP2VT: dict[str, OptionType] = {
 }
 
 # 其他常量
-MAX_FLOAT = sys.float_info.max                  # 浮点数极限值
+MAX_FLOAT = sys.float_info.max             # 浮点数极限值
 CHINA_TZ = ZoneInfo("Asia/Shanghai")       # 中国时区
 
 # 合约数据全局缓存字典
@@ -672,6 +672,10 @@ class CtpTdApi(TdApi):
                 pricetick=data["PriceTick"],
                 min_volume=data["MinLimitOrderVolume"],
                 max_volume=data["MaxLimitOrderVolume"],
+                long_margin_ratio=adjust_price(data["LongMarginRatio"], None),
+                short_margin_ratio=adjust_price(data["ShortMarginRatio"], None),
+                listed_date=_to_datetime(data["OpenDate"]),
+                expire_date=_to_datetime(data["ExpireDate"]),
                 gateway_name=self.gateway_name
             )
 
@@ -689,6 +693,11 @@ class CtpTdApi(TdApi):
                 contract.option_index = str(data["StrikePrice"])
                 contract.option_listed = datetime.strptime(data["OpenDate"], "%Y%m%d")
                 contract.option_expiry = datetime.strptime(data["ExpireDate"], "%Y%m%d")
+
+                # 期权卖出的保证金率目前没法获得，大概设定为 0.1
+                contract.short_margin_ratio = 0.1
+                # 期权买入的保证金都是0
+                contract.long_margin_ratio = 0
 
             self.gateway.on_contract(contract)
 
@@ -725,6 +734,10 @@ class CtpTdApi(TdApi):
             self.gateway.write_log(f"收到不支持的委托状态，委托号：{orderid}")
             return
 
+        if data["OrderStatus"] == THOST_FTDC_OST_Canceled and data["StatusMsg"] != "已撤单":
+            status = Status.REJECTED
+            self.gateway.write_log(f"交易委托 {orderid} 被拒，原因：{data['StatusMsg']}")
+
         timestamp: str = f"{data['InsertDate']} {data['InsertTime']}"
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
         dt = dt.replace(tzinfo=CHINA_TZ)
@@ -750,16 +763,16 @@ class CtpTdApi(TdApi):
             gateway_name=self.gateway_name
         )
         self.gateway.on_order(order)
-
         self.sysid_orderid_map[data["OrderSysID"]] = orderid
 
-        # 特殊情况撤单（非交易时段、资金不足等）的日志输出
-        if (
-            data["OrderStatus"] == THOST_FTDC_OST_Canceled
-            and data["StatusMsg"] != "已撤单"       # 正常撤单
-        ):
-            status_msg: str = data["StatusMsg"]
-            self.gateway.write_log(f"委托 {orderid} 状态更新，{status_msg}")
+        # 已被上面的 交易委托 {orderid} 被拒 替代
+        # # 特殊情况撤单（非交易时段、资金不足等）的日志输出
+        # if (
+        #     data["OrderStatus"] == THOST_FTDC_OST_Canceled
+        #     and data["StatusMsg"] != "已撤单"       # 正常撤单
+        # ):
+        #     status_msg: str = data["StatusMsg"]
+        #     self.gateway.write_log(f"委托 {orderid} 状态更新，{status_msg}")
 
     def onRtnTrade(self, data: dict) -> None:
         """成交数据推送"""
@@ -964,8 +977,14 @@ class CtpTdApi(TdApi):
         self.sysid_orderid_map.clear()
 
 
-def adjust_price(price: float) -> float:
+def adjust_price(price: float, default: float | int | None=0) -> float | int | None:
     """将异常的浮点数最大值（MAX_FLOAT）数据调整为0"""
     if price == MAX_FLOAT:
-        price = 0
+        price = default
     return price
+
+
+def _to_datetime(s: str) -> datetime | None:
+    if s == '':
+        return None
+    return datetime.strptime(s, "%Y%m%d").replace(tzinfo=CHINA_TZ)

@@ -57,6 +57,10 @@ class MyTdApi(TdApi):
 
         self.order_data: dict[str, dict] = {}
         self.trade_data: dict[str, dict] = {}
+        self.commission_rate_data: dict[str, dict] = {}
+        self.order_comm_rate_data: dict[str, dict] = {}
+        self.instrument_margin_rate_data: dict[str, dict] = {}
+        self.option_instr_trade_cost_data: dict[str, dict] = {}
 
     def onFrontConnected(self) -> None:
         """服务器连接成功回报"""
@@ -128,6 +132,40 @@ class MyTdApi(TdApi):
         tradeid: str = data["TradeID"]
         self.trade_data[tradeid] = data
 
+    def onRspQryInstrumentCommissionRate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
+        """请求手续费数据推送"""
+        self.commission_rate_data[data['InstrumentID']] = data
+        if last:
+            self.callback_result = [data, error, reqid, last]
+            with self.callback_done:
+                self.callback_done.notify()
+
+    def onRspQryInstrumentOrderCommRate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
+        """请求申报费数据推送"""
+        if len(data) > 0:
+            self.order_comm_rate_data[data['InstrumentID']] = data
+        if last:
+            self.callback_result = [data, error, reqid, last]
+            with self.callback_done:
+                self.callback_done.notify()
+
+    def onRspQryInstrumentMarginRate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
+        """请求保证金数据推送"""
+        self.instrument_margin_rate_data[data['InstrumentID']] = data
+        if last:
+            self.callback_result = [data, error, reqid, last]
+            with self.callback_done:
+                self.callback_done.notify()
+
+    def onRspQryOptionInstrTradeCost(self, data: dict, error: dict, reqid: int, last: bool) -> None:
+        """请求期权交易成本数据推送"""
+        if len(data) > 0:
+            self.option_instr_trade_cost_data[data['InstrumentID']] = data
+        if last:
+            self.callback_result = [data, error, reqid, last]
+            with self.callback_done:
+                self.callback_done.notify()
+
 
 @pytest.fixture(scope="session")
 def login_api() -> Generator[MyTdApi, None, None]:
@@ -136,7 +174,7 @@ def login_api() -> Generator[MyTdApi, None, None]:
     api: MyTdApi = MyTdApi()
 
     # 创建API对象
-    api.createFtdcTraderApi("")
+    api.createFtdcTraderApi("", True)
 
     api.subscribePrivateTopic(2)
     api.subscribePublicTopic(2)
@@ -367,3 +405,83 @@ def test_cancel_order(login_api: MyTdApi) -> None:
     sleep(WAIT_TIME)
     data = login_api.order_data[order_id]
     assert data["OrderStatus"] == THOST_FTDC_OST_Canceled         # 检查状态为已撤销
+
+
+def test_query_commission_rate(login_api: MyTdApi) -> None:
+    """测试手续费查询"""
+    login_api.reqid += 1
+    req = {
+        "BrokerID": TD_SETTING["BrokerID"],
+        "InvestorID": TD_SETTING["UserID"],
+        "InstrumentID": SYMBOL,
+    }
+    login_api.reqQryInstrumentCommissionRate(req, login_api.reqid)
+
+    with login_api.callback_done:
+        login_api.callback_done.wait(WAIT_TIME)
+
+    print(login_api.commission_rate_data)
+    error: dict = login_api.callback_result[1]
+    print(error)
+    assert not error                              # 检查error是否为空字典
+
+
+def test_query_order_comm_rate(login_api: MyTdApi) -> None:
+    """测试申报费查询"""
+    login_api.reqid += 1
+    req = {
+        "BrokerID": TD_SETTING["BrokerID"],
+        "InvestorID": TD_SETTING["UserID"],
+        "InstrumentID": SYMBOL,
+    }
+    login_api.reqQryInstrumentOrderCommRate(req, login_api.reqid)
+
+    with login_api.callback_done:
+        login_api.callback_done.wait(WAIT_TIME)
+
+    print(login_api.order_comm_rate_data)
+    error: dict = login_api.callback_result[1]
+    print(error)
+    assert not error                              # 检查error是否为空字典
+
+
+def test_query_instrument_margin_rate(login_api: MyTdApi) -> None:
+    """测试保证金查询"""
+    login_api.reqid += 1
+    req = {
+        "BrokerID": TD_SETTING["BrokerID"],
+        "InvestorID": TD_SETTING["UserID"],
+        "HedgeFlag": '1',
+        "InstrumentID": SYMBOL,
+    }
+    login_api.reqQryInstrumentMarginRate(req, login_api.reqid)
+
+    with login_api.callback_done:
+        login_api.callback_done.wait(WAIT_TIME)
+
+    print(login_api.instrument_margin_rate_data)
+    error: dict = login_api.callback_result[1]
+    print(error)
+    assert not error                              # 检查error是否为空字典
+
+
+def test_query_option_instr_trade_cost(login_api: MyTdApi) -> None:
+    """测试期权保证金查询"""
+    login_api.reqid += 1
+    req = {
+        "BrokerID": TD_SETTING["BrokerID"],
+        "InvestorID": TD_SETTING["UserID"],
+        "HedgeFlag": '1',
+        "InstrumentID": SYMBOL,
+        "InputPrice": 50,       # 期权价格
+        "UnderlyingPrice": 3120,   # 标的价格
+    }
+    login_api.reqQryOptionInstrTradeCost(req, login_api.reqid)
+
+    with login_api.callback_done:
+        login_api.callback_done.wait(WAIT_TIME)
+
+    print(login_api.option_instr_trade_cost_data)
+    error: dict = login_api.callback_result[1]
+    print(error)
+    assert not error                              # 检查error是否为空字典

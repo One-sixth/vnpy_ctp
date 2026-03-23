@@ -16,7 +16,7 @@ MD_SETTING = {
     "BrokerID": "9999",                          # 经纪商代码
 }
 MD_ADDRESS = "tcp://180.168.146.187:10131"       # 行情服务器地址
-SYMBOL = "rb2601"                                # 合约代码
+SYMBOL = "rb2701"                                # 合约代码
 WAIT_TIME = 10                                   # 回调等待时间
 
 
