@@ -15,9 +15,10 @@ MD_SETTING = {
     "Password": "xxx",                           # 密码
     "BrokerID": "9999",                          # 经纪商代码
 }
-MD_ADDRESS = "tcp://180.168.146.187:10131"       # 行情服务器地址
+MD_ADDRESS = "tcp://182.254.243.31:40011"        # 行情服务器地址
 SYMBOL = "rb2701"                                # 合约代码
 WAIT_TIME = 10                                   # 回调等待时间
+TEST_CONN_NAME = 'test/Md'
 
 
 class MyMdApi(MdApi):
@@ -75,7 +76,7 @@ def login_api() -> Generator[MyMdApi, None, None]:
     api: MyMdApi = MyMdApi()
 
     # 创建API对象
-    api.createFtdcMdApi("")
+    api.createFtdcMdApi(TEST_CONN_NAME.encode('GBK'), True)
 
     # 注册前端
     api.registerFront(MD_ADDRESS)

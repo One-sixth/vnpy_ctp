@@ -21,7 +21,7 @@ from vnpy_ctp.api import (
 
 
 # 测试参数
-SYMBOL = "rb2601"
+SYMBOL = "rb2701"
 EXCHANGE = "SHFE"
 ALL_TRADED_PRICE = 3128
 NOT_TRADED_PRICE = 3118
@@ -35,8 +35,9 @@ TD_SETTING = {
     "AppID": "simnow_client_test",               # 产品名称
     "AuthCode": "0000000000000000"               # 授权码
 }
-TD_ADDRESS = "tcp://180.168.146.187:10130"       # 交易服务器地址
+TD_ADDRESS = "tcp://182.254.243.31:40001"       # 交易服务器地址
 WAIT_TIME = 10                                   # 回调等待时间
+TEST_CONN_NAME = 'test/Td'
 
 
 class MyTdApi(TdApi):
@@ -174,7 +175,7 @@ def login_api() -> Generator[MyTdApi, None, None]:
     api: MyTdApi = MyTdApi()
 
     # 创建API对象
-    api.createFtdcTraderApi("", True)
+    api.createFtdcTraderApi(TEST_CONN_NAME.encode('GBK'), True)
 
     api.subscribePrivateTopic(2)
     api.subscribePublicTopic(2)
